@@ -141,7 +141,7 @@ function renderSidebar() {
     let status = 'pending';
     if (state.currentReport) {
       const found = state.currentReport.report.mandatory.find((m) => m.id === item.id);
-      status = found?.present ? 'ok' : 'missing';
+      if (found) status = found.present ? 'ok' : 'missing';
     }
     grouped[cat].push({ label: item.label, status });
   });
@@ -192,6 +192,7 @@ function renderSummaryPanel() {
             <label>Bestand</label>
             <div style="font-size:13px;">${escapeHtml(state.currentReport.fileName)}</div>
           </div>
+          <button class="btn" data-action="recheck" style="width:100%;margin-bottom:8px;">Opnieuw controleren</button>
           <button class="btn btn-primary" data-action="new-check" style="width:100%;">Nieuwe controle</button>
         `
             : '<p class="empty-state">Upload een bon om een samenvatting te zien.</p>'
@@ -316,12 +317,33 @@ function renderControleTab() {
 }
 
 /* ---------------------------------------------------------------------- */
+/* Herberekenen zonder herupload                                           */
+/* ---------------------------------------------------------------------- */
+
+function rerunCurrentCheck() {
+  if (!state.currentReport) return;
+  const report = runCheck(state.currentReport.bonText, state.mandatoryItems, state.rules);
+  state.currentReport = { ...state.currentReport, report };
+}
+
+function renderRecheckBanner() {
+  if (!state.currentReport) return '';
+  return `
+    <div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+      <span style="font-size:13px;color:var(--text-muted);">Actieve controle: <strong>${escapeHtml(state.currentReport.fileName)}</strong> — wijzigingen hierboven worden automatisch verrekend.</span>
+      <button class="btn btn-primary btn-sm" data-action="recheck">Opnieuw controleren</button>
+    </div>
+  `;
+}
+
+/* ---------------------------------------------------------------------- */
 /* Checklist tab (verplichte items CRUD)                                   */
 /* ---------------------------------------------------------------------- */
 
 function renderChecklistTab() {
   return `
     <div class="main">
+      ${renderRecheckBanner()}
       <div class="section-title">
         <h2>Verplichte items (${state.mandatoryItems.length})</h2>
         <button class="btn btn-primary btn-sm" data-action="add-mandatory-open">+ Item toevoegen</button>
@@ -386,6 +408,7 @@ function renderMandatoryForm(item) {
 function renderRegelsTab() {
   return `
     <div class="main">
+      ${renderRecheckBanner()}
       <div class="section-title">
         <h2>Logische regels (${state.rules.length})</h2>
         <button class="btn btn-primary btn-sm" data-action="add-rule-open">+ Regel toevoegen</button>
@@ -634,6 +657,7 @@ app.addEventListener('click', (e) => {
     case 'delete-mandatory':
       state.mandatoryItems = state.mandatoryItems.filter((m) => m.id !== id);
       saveMandatoryItems(state.mandatoryItems);
+      rerunCurrentCheck();
       showToast('Item verwijderd.');
       break;
 
@@ -657,7 +681,13 @@ app.addEventListener('click', (e) => {
     case 'delete-rule':
       state.rules = state.rules.filter((r) => r.id !== id);
       saveRules(state.rules);
+      rerunCurrentCheck();
       showToast('Regel verwijderd.');
+      break;
+
+    case 'recheck':
+      rerunCurrentCheck();
+      showToast('Controle opnieuw uitgevoerd.');
       break;
 
     case 'delete-history':
@@ -709,7 +739,7 @@ app.addEventListener('submit', (e) => {
     }
     saveMandatoryItems(state.mandatoryItems);
     resetMandatoryForms();
-    render();
+    rerunCurrentCheck();
     showToast('Checklist opgeslagen.');
     return;
   }
@@ -746,7 +776,7 @@ app.addEventListener('submit', (e) => {
     }
     saveRules(state.rules);
     resetRuleForms();
-    render();
+    rerunCurrentCheck();
     showToast('Regel opgeslagen.');
     return;
   }
