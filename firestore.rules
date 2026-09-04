@@ -1,0 +1,44 @@
+rules_version = '2';
+
+// Firebase console -> Firestore Database -> Rules -> plak dit volledige bestand -> Publiceren.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isBlueMoon() {
+      return request.auth != null
+        && request.auth.token.email != null
+        && request.auth.token.email.matches('.*@bluemoon[.]be$');
+    }
+
+    // Materiaalcatalogus: gedeeld, iedereen bij Blue Moon mag ze raadplegen en
+    // her-importeren via de "Producten"-tab.
+    match /products/{code} {
+      allow read, write: if isBlueMoon();
+    }
+    match /meta/{doc} {
+      allow read, write: if isBlueMoon();
+    }
+
+    // "Altijd nodig"-lijst: gedeelde basisregels, door iedereen beheerd.
+    match /alwaysRequired/{id} {
+      allow read, write: if isBlueMoon();
+    }
+
+    // Logische regels: iedereen ziet alle regels (gedeeld + ieders privé-regels,
+    // gefilterd aan de clientzijde), maar enkel de eigenaar mag bewerken/verwijderen.
+    match /rules/{id} {
+      allow read: if isBlueMoon();
+      allow create: if isBlueMoon() && request.resource.data.ownerUid == request.auth.uid;
+      allow update, delete: if isBlueMoon() && resource.data.ownerUid == request.auth.uid;
+    }
+
+    // Controlegeschiedenis: iedereen ziet alle controles (transparantie), maar
+    // enkel de uitvoerder mag zijn eigen entry verwijderen. Geen updates achteraf.
+    match /checks/{id} {
+      allow read: if isBlueMoon();
+      allow create: if isBlueMoon() && request.resource.data.uid == request.auth.uid;
+      allow delete: if isBlueMoon() && resource.data.uid == request.auth.uid;
+      allow update: if false;
+    }
+  }
+}
