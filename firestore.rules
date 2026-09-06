@@ -1,43 +1,49 @@
 rules_version = '2';
 
 // Firebase console -> Firestore Database -> Rules -> plak dit volledige bestand -> Publiceren.
+//
+// Er is geen Google-login meer, enkel anonieme Firebase-auth (voor elke
+// bezoeker die de gedeelde teamcode kent en op de site geraakt is — zie
+// src/auth.js en src/main.js). Deze regels controleren dus enkel "is er
+// sowieso een Firebase-sessie", niet wie de persoon is. Dat is een lichte
+// toegangsdrempel, geen sterke beveiliging: behandel deze app niet als een
+// plek voor gevoelige data.
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function isBlueMoon() {
-      return request.auth != null
-        && request.auth.token.email != null
-        && request.auth.token.email.matches('.*@bluemoon[.]be$');
+    function isSignedIn() {
+      return request.auth != null;
     }
 
-    // Materiaalcatalogus: gedeeld, iedereen bij Blue Moon mag ze raadplegen en
-    // her-importeren via de "Producten"-tab.
+    // Materiaalcatalogus: gedeeld, iedereen mag ze raadplegen en her-importeren
+    // via de "Producten"-tab.
     match /products/{code} {
-      allow read, write: if isBlueMoon();
+      allow read, write: if isSignedIn();
     }
     match /meta/{doc} {
-      allow read, write: if isBlueMoon();
+      allow read, write: if isSignedIn();
     }
 
     // "Altijd nodig"-lijst: gedeelde basisregels, door iedereen beheerd.
     match /alwaysRequired/{id} {
-      allow read, write: if isBlueMoon();
+      allow read, write: if isSignedIn();
     }
 
     // Logische regels: iedereen ziet alle regels (gedeeld + ieders privé-regels,
-    // gefilterd aan de clientzijde), maar enkel de eigenaar mag bewerken/verwijderen.
+    // gefilterd aan de clientzijde), maar enkel de eigenaar (zelfde anonieme
+    // sessie/browser die de regel aanmaakte) mag bewerken/verwijderen.
     match /rules/{id} {
-      allow read: if isBlueMoon();
-      allow create: if isBlueMoon() && request.resource.data.ownerUid == request.auth.uid;
-      allow update, delete: if isBlueMoon() && resource.data.ownerUid == request.auth.uid;
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.ownerUid == request.auth.uid;
+      allow update, delete: if isSignedIn() && resource.data.ownerUid == request.auth.uid;
     }
 
     // Controlegeschiedenis: iedereen ziet alle controles (transparantie), maar
     // enkel de uitvoerder mag zijn eigen entry verwijderen. Geen updates achteraf.
     match /checks/{id} {
-      allow read: if isBlueMoon();
-      allow create: if isBlueMoon() && request.resource.data.uid == request.auth.uid;
-      allow delete: if isBlueMoon() && resource.data.uid == request.auth.uid;
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
       allow update: if false;
     }
   }

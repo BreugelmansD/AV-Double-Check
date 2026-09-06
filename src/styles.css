@@ -429,6 +429,7 @@ button {
 }
 
 input[type="text"],
+input[type="password"],
 textarea {
   width: 100%;
   border: 1px solid var(--border);
@@ -446,6 +447,7 @@ textarea {
 }
 
 input[type="text"]:focus,
+input[type="password"]:focus,
 textarea:focus {
   outline: none;
   border-color: var(--navy-soft);
@@ -706,13 +708,6 @@ textarea:focus {
   padding: 1px 5px;
   border-radius: 4px;
   font-size: 12.5px;
-}
-
-.avatar-img {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  object-fit: cover;
 }
 
 /* ---------- Scope badges (regels) ---------- */

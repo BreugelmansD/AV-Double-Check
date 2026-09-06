@@ -1,5 +1,5 @@
-import { isFirebaseConfigured, ALLOWED_EMAIL_DOMAIN } from './firebaseConfig.js';
-import { signIn, signOutUser, watchAuth, isAllowedEmail } from './auth.js';
+import { isFirebaseConfigured, TEAM_PASSCODE } from './firebaseConfig.js';
+import { ensureAnonymousAuth } from './auth.js';
 import {
   fetchAllProducts,
   seedProductsIfEmpty,
@@ -53,9 +53,12 @@ function uid() {
 /* State                                                                    */
 /* ---------------------------------------------------------------------- */
 
+const NAME_KEY = 'avdc_display_name';
+const UNLOCKED_KEY = 'avdc_unlocked';
+
 const state = {
-  screen: 'loading', // loading | setup | login | app
-  loginError: null,
+  screen: 'loading', // loading | setup | gate | app
+  gateError: null,
   user: null,
   tab: 'controle',
 
@@ -86,6 +89,7 @@ const state = {
 
 const app = document.getElementById('app');
 const unsubscribers = [];
+let appDataLoaded = false;
 
 function formOpen() {
   return state.addingAlways || !!state.editingAlwaysId || state.addingRule || !!state.editingRuleId || state.productsTab.importing;
@@ -244,9 +248,9 @@ function renderHeader() {
         ).join('')}
       </nav>
       <div class="user-chip">
-        ${u?.photoURL ? `<img class="avatar avatar-img" src="${escapeHtml(u.photoURL)}" alt="" />` : `<span class="avatar">${initials(u?.displayName || u?.email || '?')}</span>`}
-        <span>${escapeHtml(u?.displayName || u?.email || '')}</span>
-        <button class="btn btn-sm" data-action="sign-out">Afmelden</button>
+        <span class="avatar">${initials(u?.displayName || '?')}</span>
+        <span>${escapeHtml(u?.displayName || '')}</span>
+        <button class="btn btn-sm" data-action="sign-out">Andere naam</button>
       </div>
     </header>
   `;
@@ -786,26 +790,73 @@ function renderSetupScreen() {
   app.querySelector('[data-action="reload"]').addEventListener('click', () => window.location.reload());
 }
 
-function renderLoginScreen() {
+function renderGateScreen() {
+  const unlocked = localStorage.getItem(UNLOCKED_KEY) === '1';
+  const savedName = localStorage.getItem(NAME_KEY) || '';
   app.innerHTML = `
     <div class="gate-screen">
       <div class="gate-card">
         <h1>AV Double Check</h1>
-        <p>Log in met je Blue Moon Google-account om bonnen te controleren en regels te beheren.</p>
-        ${state.loginError ? `<div class="error-box">${escapeHtml(state.loginError)}</div>` : ''}
-        <button class="btn btn-primary" data-action="sign-in">Inloggen met Google</button>
+        <p>${unlocked ? 'Onder welke naam wil je verdergaan?' : 'Voer de teamcode van Blue Moon in om verder te gaan.'}</p>
+        ${state.gateError ? `<div class="error-box">${escapeHtml(state.gateError)}</div>` : ''}
+        <form data-action="gate-submit" style="text-align:left;">
+          ${
+            unlocked
+              ? ''
+              : `<div class="field">
+                  <label>Toegangscode</label>
+                  <input type="password" name="passcode" autocomplete="off" required />
+                </div>`
+          }
+          <div class="field">
+            <label>Jouw naam</label>
+            <input type="text" name="displayName" value="${escapeHtml(savedName)}" placeholder="bv. Jan Peeters" required />
+          </div>
+          <button type="submit" class="btn btn-primary" style="width:100%;">Binnen</button>
+        </form>
       </div>
     </div>
   `;
-  app.querySelector('[data-action="sign-in"]').addEventListener('click', async () => {
-    state.loginError = null;
-    try {
-      await signIn(); // navigeert de pagina weg naar Google; keert normaliter niet terug
-    } catch (err) {
-      state.loginError = `Inloggen mislukt (${err.code || err.message}). Probeer opnieuw.`;
-      renderLoginScreen();
+  app.querySelector('[data-action="gate-submit"]').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    state.gateError = null;
+    const data = new FormData(e.target);
+    const displayName = (data.get('displayName') || '').toString().trim();
+    if (!displayName) return;
+    if (!unlocked) {
+      const passcode = (data.get('passcode') || '').toString();
+      if (passcode !== TEAM_PASSCODE) {
+        state.gateError = 'Onjuiste toegangscode.';
+        renderGateScreen();
+        return;
+      }
+      localStorage.setItem(UNLOCKED_KEY, '1');
+    }
+    localStorage.setItem(NAME_KEY, displayName);
+    if (appDataLoaded) {
+      // Data en live-listeners staan al klaar van een vorige sessie in dit
+      // tabblad ("Andere naam" na een eerdere keer inloggen) — enkel de
+      // weergavenaam wijzigen, niet alles heropnieuw ophalen/abonneren.
+      state.user = { ...state.user, displayName };
+      state.screen = 'app';
+      render();
+    } else {
+      await enterApp(displayName);
     }
   });
+}
+
+async function enterApp(displayName) {
+  state.screen = 'loading';
+  render();
+  try {
+    const anonUser = await ensureAnonymousAuth();
+    state.user = { uid: anonUser.uid, displayName };
+    await loadAppData();
+  } catch (err) {
+    console.error('Kon geen verbinding maken', err);
+    renderFatalError('Kon geen verbinding maken met de gedeelde database. Controleer je internetverbinding en probeer opnieuw.');
+  }
 }
 
 function renderLoadingScreen() {
@@ -836,7 +887,7 @@ function renderTabMain() {
 function render() {
   if (state.screen === 'loading') return renderLoadingScreen();
   if (state.screen === 'setup') return renderSetupScreen();
-  if (state.screen === 'login') return renderLoginScreen();
+  if (state.screen === 'gate') return renderGateScreen();
 
   app.innerHTML = `
     ${renderHeader()}
@@ -970,6 +1021,7 @@ async function loadAppData() {
     })
   );
 
+  appDataLoaded = true;
   state.screen = 'app';
   render();
 }
@@ -1042,7 +1094,9 @@ app.addEventListener('click', (e) => {
       break;
 
     case 'sign-out':
-      signOutUser();
+      state.gateError = null;
+      state.screen = 'gate';
+      render();
       break;
 
     case 'dropzone-click':
@@ -1237,39 +1291,15 @@ async function bootstrap() {
     return;
   }
 
-  render(); // loading
-
-  try {
-    const unsub = await watchAuth(async (user) => {
-      if (user && !isAllowedEmail(user.email)) {
-        state.loginError = `Enkel toegankelijk voor @${ALLOWED_EMAIL_DOMAIN}-accounts. Je logde in met ${user.email}.`;
-        state.user = null;
-        state.screen = 'login';
-        render();
-        signOutUser();
-        return;
-      }
-      if (!user) {
-        state.user = null;
-        state.screen = 'login';
-        render();
-        return;
-      }
-      state.user = user;
-      if (state.screen !== 'app') {
-        try {
-          await loadAppData();
-        } catch (err) {
-          console.error('Kon app-data niet laden', err);
-          renderFatalError('Kon geen verbinding maken met de gedeelde database. Controleer je internetverbinding en probeer opnieuw.');
-        }
-      }
-    });
-    unsubscribers.push(unsub);
-  } catch (err) {
-    console.error('Firebase-initialisatie mislukt', err);
-    renderFatalError('Kon Firebase niet initialiseren. Controleer de gegevens in src/firebaseConfig.js en je internetverbinding.');
+  const unlocked = localStorage.getItem(UNLOCKED_KEY) === '1';
+  const savedName = localStorage.getItem(NAME_KEY);
+  if (!unlocked || !savedName) {
+    state.screen = 'gate';
+    render();
+    return;
   }
+
+  await enterApp(savedName);
 }
 
 bootstrap();

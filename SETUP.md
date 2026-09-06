@@ -17,14 +17,17 @@ deze grootte (gratis "Spark"-tier).
 3. Je krijgt een codeblok met `firebaseConfig = { apiKey: ..., authDomain: ..., ... }`.
 4. Kopieer deze waarden naar [`src/firebaseConfig.js`](src/firebaseConfig.js) in deze repo, ter vervanging van de `VUL_IN`-waarden.
 
-## 3. Google-login inschakelen
+## 3. Anonieme login inschakelen
+
+Er is geen Google-account nodig om in te loggen — de toegangsdrempel is een
+gedeelde teamcode (zie stap 5). Onder de motorkap gebruikt de app wel een
+(onzichtbare) Firebase-sessie zodat Firestore weet dat het om een "ingelogde"
+bezoeker gaat.
 
 1. Ga naar **Build -> Authentication -> Get started**.
-2. Kies **Google** als sign-in-methode en schakel deze in.
-3. Vul een support-e-mailadres in en sla op.
-4. Ga naar **Authentication -> Settings -> Authorized domains** en voeg je GitHub Pages-domein toe (bv. `breugelmansd.github.io`), zodat inloggen daar werkt.
-
-De app zelf laat na het inloggen enkel `@bluemoon.be`-adressen effectief binnen (zowel in de interface als in de Firestore-regels hieronder) — een collega met een privé Gmail-account komt er niet in, ook al staat Google-login open voor iedereen.
+2. Kies **Anonymous** als sign-in-methode en schakel deze in (schakelaar
+   "Enable" -> **Save**). Geen support-e-mail, geen "Authorized domains" nodig
+   — dat is enkel vereist voor Google/Microsoft-achtige providers.
 
 ## 4. Firestore-database aanmaken
 
@@ -33,11 +36,22 @@ De app zelf laat na het inloggen enkel `@bluemoon.be`-adressen effectief binnen 
 3. Start in **productiemodus**.
 4. Ga naar het tabblad **Rules** en vervang de inhoud volledig door de inhoud van [`firestore.rules`](firestore.rules) uit deze repo. Klik **Publiceren**.
 
-## 5. Publiceren
+## 5. Teamcode instellen
 
-1. Commit en push je ingevulde `src/firebaseConfig.js` naar GitHub (dit bestand bevat geen geheimen — een Firebase web-apikey is bedoeld om publiek in client-code te staan; de echte beveiliging zit in de Firestore-regels en de `@bluemoon.be`-check).
+Open [`src/firebaseConfig.js`](src/firebaseConfig.js) en pas `TEAM_PASSCODE`
+aan naar een code die je met collega's deelt (bv. via Slack/WhatsApp). Dit is
+een lichte toegangsdrempel, geen echte beveiliging — iedereen die de broncode
+bekijkt kan de code zien. Behandel deze app dus niet als een plek voor
+gevoelige data.
+
+## 6. Publiceren
+
+1. Commit en push je ingevulde `src/firebaseConfig.js` naar GitHub (het bevat
+   geen geheimen die je wil verbergen voor gebruikers — een Firebase
+   web-apikey is bedoeld om publiek in client-code te staan; de teamcode is
+   wel zichtbaar voor wie de broncode bekijkt, zie hierboven).
 2. Zet **Settings -> Pages** aan op branch `main`, map `/` (indien nog niet gebeurd).
-3. Open de gegenereerde GitHub Pages-URL, log in met je Blue Moon-account, en klaar.
+3. Open de gegenereerde GitHub Pages-URL, voer de teamcode + je naam in, en klaar.
 
 ## Later: catalogus bijwerken
 

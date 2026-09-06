@@ -33,13 +33,13 @@ alfacodes/productnamen en door jullie gedefinieerde regels.
 ## Delen binnen Blue Moon
 
 De app gebruikt Firebase (gratis tier) zodat alle collega's dezelfde
-catalogus, checklist, regels en geschiedenis zien. Inloggen gebeurt met een
-Google-account dat eindigt op `@bluemoon.be` — zowel client-side als
-afgedwongen via Firestore-beveiligingsregels.
+catalogus, checklist, regels en geschiedenis zien. Er is geen Google-account
+nodig: je logt in met een gedeelde teamcode + je eigen naam (zie
+`src/firebaseConfig.js`).
 
 **Eenmalige setup vereist** — zie [`SETUP.md`](SETUP.md) voor de volledige
-stap-voor-stap instructies (Firebase-project aanmaken, Google-login
-inschakelen, Firestore-regels publiceren).
+stap-voor-stap instructies (Firebase-project aanmaken, anonieme login
+inschakelen, Firestore-regels publiceren, teamcode instellen).
 
 ## Waarom geen AI?
 
@@ -85,7 +85,7 @@ src/
   engine.js             Normalisatie + matching-logica + EN-regel-evaluatie ("het brein")
   firebaseConfig.js      Jouw Firebase-projectgegevens (zelf invullen)
   firebase.js             Lui geladen Firebase SDK-init
-  auth.js                 Google-login + @bluemoon.be domeincheck
+  auth.js                 Stille anonieme Firebase-login (voor Firestore-toegang)
   db.js                   Firestore CRUD (producten, altijd-nodig, regels, geschiedenis)
   productImport.js         Excel/CSV -> productrecords (her-import via de app)
   seedProducts.js          Eenmalige seed-data (huidige Blue Moon materiaallijst)

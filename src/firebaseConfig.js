@@ -13,8 +13,10 @@ export const firebaseConfig = {
   appId: '1:152069939641:web:028e152c06499a4b239668',
 };
 
-// Enkel Google-accounts met dit e-maildomein krijgen toegang tot de app.
-export const ALLOWED_EMAIL_DOMAIN = 'bluemoon.be';
+// Gedeelde toegangscode voor het hele Blue Moon-team (geen Google-login nodig).
+// Dit is een lichte toegangsdrempel, geen echte beveiliging: iedereen die de
+// broncode bekijkt kan deze code zien. Pas hem aan wanneer je maar wil.
+export const TEAM_PASSCODE = 'bluemoon2026';
 
 export function isFirebaseConfigured() {
   return firebaseConfig.apiKey !== 'VUL_IN' && !!firebaseConfig.apiKey;

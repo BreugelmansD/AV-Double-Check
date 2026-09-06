@@ -1,35 +1,27 @@
 import { getFirebase } from './firebase.js';
-import { ALLOWED_EMAIL_DOMAIN } from './firebaseConfig.js';
-
-export function isAllowedEmail(email) {
-  return !!email && email.toLowerCase().endsWith(`@${ALLOWED_EMAIL_DOMAIN.toLowerCase()}`);
-}
 
 /**
- * Start de Google-login via een volledige pagina-redirect (niet via een popup).
- * Een popup breekt hier gemakkelijk: zodra er vóór signInWithPopup nog een
- * asynchrone stap zit (zoals de lazy-geladen Firebase SDK hieronder), ziet de
- * browser de aanroep niet meer als een directe reactie op de klik en blokkeert
- * hij het venster stilzwijgend (auth/popup-blocked) — ook al klikte de
- * gebruiker echt. Een redirect heeft dat probleem niet en werkt overal.
+ * Zorgt voor een (stille, anonieme) Firebase-sessie zodat Firestore-verzoeken
+ * geauthenticeerd zijn. Er is geen Google-login meer: de toegangsdrempel voor
+ * collega's is de gedeelde teamcode (zie firebaseConfig.js + main.js), niet
+ * een echt account. Anonieme login heeft geen "toegestane domeinen" of
+ * OAuth-consent-scherm nodig — dat maakt dit een stuk minder brekbaar dan
+ * Google-login vanaf een statische GitHub Pages-site.
+ *
+ * Wacht eerst op de initiële auth-status (die een eerder opgeslagen anonieme
+ * sessie in dezelfde browser herstelt) vóór er een nieuwe wordt aangemaakt —
+ * anders zou elke herlaad-beurt een nieuwe, andere gebruiker opleveren en
+ * daarmee "mijn privé-regels" telkens resetten.
  */
-export async function signIn() {
+export async function ensureAnonymousAuth() {
   const { auth, authMod } = await getFirebase();
-  const provider = new authMod.GoogleAuthProvider();
-  provider.setCustomParameters({ hd: ALLOWED_EMAIL_DOMAIN });
-  await authMod.signInWithRedirect(auth, provider);
-}
-
-export async function signOutUser() {
-  const { auth, authMod } = await getFirebase();
-  return authMod.signOut(auth);
-}
-
-/**
- * @param {(user: object|null) => void} callback
- * @returns {Promise<() => void>} unsubscribe function
- */
-export async function watchAuth(callback) {
-  const { auth, authMod } = await getFirebase();
-  return authMod.onAuthStateChanged(auth, callback);
+  const existing = await new Promise((resolve) => {
+    const unsub = authMod.onAuthStateChanged(auth, (user) => {
+      unsub();
+      resolve(user);
+    });
+  });
+  if (existing) return existing;
+  const result = await authMod.signInAnonymously(auth);
+  return result.user;
 }
