@@ -1142,7 +1142,9 @@ app.addEventListener('click', (e) => {
       break;
 
     case 'delete-always':
-      deleteAlwaysRequired(id).then(() => showToast('Item verwijderd.'));
+      deleteAlwaysRequired(id)
+        .then(() => showToast('Item verwijderd.'))
+        .catch((err) => showToast(`Verwijderen mislukt: ${err.message}`));
       break;
 
     case 'add-rule-open':
@@ -1163,7 +1165,9 @@ app.addEventListener('click', (e) => {
       break;
 
     case 'delete-rule':
-      deleteRule(id).then(() => showToast('Regel verwijderd.'));
+      deleteRule(id)
+        .then(() => showToast('Regel verwijderd.'))
+        .catch((err) => showToast(`Verwijderen mislukt: ${err.message}`));
       break;
 
     case 'recheck':
@@ -1244,7 +1248,9 @@ app.addEventListener('submit', (e) => {
       ? { type: 'product', code: chosen.code, label: chosen.label, category }
       : { type: 'custom', label: chosen.label, category };
     const promise = id ? updateAlwaysRequired(id, item) : addAlwaysRequired(item, state.user);
-    promise.then(() => showToast('Opgeslagen.'));
+    promise
+      .then(() => showToast('Opgeslagen.'))
+      .catch((err) => showToast(`Opslaan mislukt: ${err.message}`));
     resetAlwaysForms();
     render();
     return;
@@ -1260,7 +1266,9 @@ app.addEventListener('submit', (e) => {
     const scope = data.get('scope');
     const rule = { triggers, requires, scope };
     const promise = id ? updateRule(id, rule) : addRule(rule, state.user);
-    promise.then(() => showToast('Regel opgeslagen.'));
+    promise
+      .then(() => showToast('Regel opgeslagen.'))
+      .catch((err) => showToast(`Opslaan mislukt: ${err.message}`));
     resetRuleForms();
     render();
     return;
