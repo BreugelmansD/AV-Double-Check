@@ -1,23 +1,23 @@
 import { getFirebase } from './firebase.js';
 import { ALLOWED_EMAIL_DOMAIN } from './firebaseConfig.js';
 
-export class AccessDeniedError extends Error {}
-
 export function isAllowedEmail(email) {
   return !!email && email.toLowerCase().endsWith(`@${ALLOWED_EMAIL_DOMAIN.toLowerCase()}`);
 }
 
+/**
+ * Start de Google-login via een volledige pagina-redirect (niet via een popup).
+ * Een popup breekt hier gemakkelijk: zodra er vóór signInWithPopup nog een
+ * asynchrone stap zit (zoals de lazy-geladen Firebase SDK hieronder), ziet de
+ * browser de aanroep niet meer als een directe reactie op de klik en blokkeert
+ * hij het venster stilzwijgend (auth/popup-blocked) — ook al klikte de
+ * gebruiker echt. Een redirect heeft dat probleem niet en werkt overal.
+ */
 export async function signIn() {
   const { auth, authMod } = await getFirebase();
   const provider = new authMod.GoogleAuthProvider();
   provider.setCustomParameters({ hd: ALLOWED_EMAIL_DOMAIN });
-  const result = await authMod.signInWithPopup(auth, provider);
-  const email = result.user.email || '';
-  if (!isAllowedEmail(email)) {
-    await authMod.signOut(auth);
-    throw new AccessDeniedError(`Enkel toegankelijk voor @${ALLOWED_EMAIL_DOMAIN}-accounts. Je logde in met ${email}.`);
-  }
-  return result.user;
+  await authMod.signInWithRedirect(auth, provider);
 }
 
 export async function signOutUser() {
@@ -31,13 +31,5 @@ export async function signOutUser() {
  */
 export async function watchAuth(callback) {
   const { auth, authMod } = await getFirebase();
-  return authMod.onAuthStateChanged(auth, (user) => {
-    if (user && !isAllowedEmail(user.email)) {
-      // Sessie van een vorig, niet-toegelaten account: uitloggen.
-      authMod.signOut(auth);
-      callback(null);
-      return;
-    }
-    callback(user);
-  });
+  return authMod.onAuthStateChanged(auth, callback);
 }

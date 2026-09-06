@@ -1,5 +1,5 @@
-import { isFirebaseConfigured } from './firebaseConfig.js';
-import { signIn, signOutUser, watchAuth, AccessDeniedError } from './auth.js';
+import { isFirebaseConfigured, ALLOWED_EMAIL_DOMAIN } from './firebaseConfig.js';
+import { signIn, signOutUser, watchAuth, isAllowedEmail } from './auth.js';
 import {
   fetchAllProducts,
   seedProductsIfEmpty,
@@ -800,9 +800,9 @@ function renderLoginScreen() {
   app.querySelector('[data-action="sign-in"]').addEventListener('click', async () => {
     state.loginError = null;
     try {
-      await signIn();
+      await signIn(); // navigeert de pagina weg naar Google; keert normaliter niet terug
     } catch (err) {
-      state.loginError = err instanceof AccessDeniedError ? err.message : 'Inloggen mislukt. Probeer opnieuw.';
+      state.loginError = `Inloggen mislukt (${err.code || err.message}). Probeer opnieuw.`;
       renderLoginScreen();
     }
   });
@@ -1241,6 +1241,14 @@ async function bootstrap() {
 
   try {
     const unsub = await watchAuth(async (user) => {
+      if (user && !isAllowedEmail(user.email)) {
+        state.loginError = `Enkel toegankelijk voor @${ALLOWED_EMAIL_DOMAIN}-accounts. Je logde in met ${user.email}.`;
+        state.user = null;
+        state.screen = 'login';
+        render();
+        signOutUser();
+        return;
+      }
       if (!user) {
         state.user = null;
         state.screen = 'login';
