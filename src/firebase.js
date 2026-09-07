@@ -23,11 +23,14 @@ export async function getFirebase() {
       ]);
       const app = initializeApp(firebaseConfig);
       const auth = authMod.getAuth(app);
-      // Sommige netwerken/ad-blockers/proxies blokkeren Firestore's normale
-      // streaming-verbinding (WebChannel), wat zich uit als valse
-      // "client is offline"-fouten. auto-detect long polling laat de SDK dan
-      // zelf terugvallen op gewone HTTP long-polling.
-      const db = storeMod.initializeFirestore(app, { experimentalAutoDetectLongPolling: true });
+      // Sommige netwerken/proxies/browserinstellingen blokkeren Firestore's
+      // normale streaming-verbinding (WebChannel), wat zich uit als valse
+      // "client is offline"-fouten (auto-detect bleek dit niet altijd te
+      // herkennen) — forceer daarom gewone HTTP long-polling.
+      const db = storeMod.initializeFirestore(app, {
+        experimentalForceLongPolling: true,
+        useFetchStreams: false,
+      });
       return { app, auth, db, authMod, storeMod };
     })();
   }
