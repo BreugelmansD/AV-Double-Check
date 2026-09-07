@@ -49,6 +49,16 @@ function uid() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+/**
+ * Een "altijd nodig"-item is ofwel één los item (oud schema) ofwel een
+ * OR-groep van alternatieven (`items: [...]`) — bv. "Schuko-adapter OF
+ * krachtstroomkabel". Geeft altijd een array van {type,code?,label} terug.
+ */
+function alwaysItemGroup(item) {
+  if (Array.isArray(item.items) && item.items.length > 0) return item.items;
+  return [item.type === 'product' ? { type: 'product', code: item.code, label: item.label } : { type: 'custom', label: item.label }];
+}
+
 /* ---------------------------------------------------------------------- */
 /* State                                                                    */
 /* ---------------------------------------------------------------------- */
@@ -534,7 +544,7 @@ function renderChecklistTab() {
                   : `
             <div class="list-item">
               <div class="list-item-main">
-                <div class="list-item-title">${escapeHtml(item.label)}</div>
+                <div class="list-item-title">${alwaysItemGroup(item).map((it) => escapeHtml(it.label)).join(' <span class="rule-and">OF</span> ')}</div>
                 <div class="list-item-meta">Categorie: ${escapeHtml(item.category || 'Algemeen')} · toegevoegd door ${escapeHtml(item.addedBy || '?')}</div>
               </div>
               <div class="list-item-actions">
@@ -551,11 +561,11 @@ function renderChecklistTab() {
 
 function renderAlwaysForm(item) {
   const isEdit = !!item;
-  const initial = item ? [item.type === 'product' ? { type: 'product', code: item.code, label: item.label } : { type: 'custom', label: item.label }] : [];
+  const initial = item ? alwaysItemGroup(item) : [];
   return `
     <form class="card" data-action="submit-always" data-id="${isEdit ? item.id : ''}">
       <div class="field">
-        <label>Materiaal (zoek in de catalogus of voeg los tekstitem toe)</label>
+        <label>Materiaal — kies er meerdere als je bedoelt "één van deze is voldoende" (bv. Schuko-adapter OF krachtstroomkabel)</label>
         ${pickerMountHtml('always-picker', 'bv. EHBO-kit, gaffer tape, of zoek een product...')}
       </div>
       <div class="field">
@@ -953,7 +963,7 @@ function attachDynamicListeners() {
   if (alwaysPicker) {
     const initEl = alwaysPicker.closest('form').querySelector('[data-picker-init]');
     const initial = JSON.parse(initEl.dataset.pickerInit || '[]');
-    mountProductPicker(alwaysPicker, initial, { max: 1 });
+    mountProductPicker(alwaysPicker, initial);
   }
   const triggersPicker = document.querySelector('[data-picker-key="rule-triggers"]');
   const requiresPicker = document.querySelector('[data-picker-key="rule-requires"]');
@@ -1239,14 +1249,12 @@ app.addEventListener('submit', (e) => {
   if (action === 'submit-always') {
     const picked = pickerInstances.get('always-picker')?.getItems() || [];
     if (picked.length === 0) {
-      showToast('Kies of typ eerst een materiaal.');
+      showToast('Kies of typ eerst minstens één materiaal.');
       return;
     }
-    const chosen = picked[0];
     const category = data.get('category').trim() || 'Algemeen';
-    const item = chosen.type === 'product'
-      ? { type: 'product', code: chosen.code, label: chosen.label, category }
-      : { type: 'custom', label: chosen.label, category };
+    const items = picked.map((p) => (p.type === 'product' ? { type: 'product', code: p.code, label: p.label } : { type: 'custom', label: p.label }));
+    const item = { items, category };
     const promise = id ? updateAlwaysRequired(id, item) : addAlwaysRequired(item, state.user);
     promise
       .then(() => showToast('Opgeslagen.'))

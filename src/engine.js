@@ -126,6 +126,22 @@ function resolveLabel(itemRef, productsByCode) {
 }
 
 /**
+ * Een "altijd nodig"-item is ofwel één los item (oud schema, nog steeds
+ * ondersteund) ofwel een OR-groep van alternatieven (nieuw: `items: [itemRef]`)
+ * — bv. "Schuko-adapter OF krachtstroomkabel": één van beide aanwezig volstaat.
+ */
+function alwaysEntryItems(entry) {
+  if (Array.isArray(entry.items) && entry.items.length > 0) {
+    return entry.items.map((it) => (it.type === 'product' ? { type: 'product', code: it.code, label: it.label } : { type: 'custom', label: it.label }));
+  }
+  return [entry.type === 'product' ? { type: 'product', code: entry.code, label: entry.label } : { type: 'custom', label: entry.label }];
+}
+
+function groupKey(itemRefs) {
+  return `group:${itemRefs.map(itemKey).join('|')}`;
+}
+
+/**
  * Voert de volledige controle uit van een bon-tekst tegen:
  *  - de "altijd nodig"-lijst
  *  - de logische EN-regels (elke trigger moet aanwezig zijn opdat de regel afgaat)
@@ -145,13 +161,15 @@ export function runCheck(bonText, products, alwaysRequired, rules, overrides = n
   const present = (itemRef) => isItemPresent(itemRef, foundCodes, normalizedText, overrides);
 
   const alwaysResults = alwaysRequired.map((item) => {
-    const itemRef = item.type === 'product' ? { type: 'product', code: item.code, label: item.label } : { type: 'custom', label: item.label };
+    const alternatives = alwaysEntryItems(item);
+    const key = groupKey(alternatives);
+    const isPresent = (overrides && overrides.has(key)) || alternatives.some((ref) => present(ref));
     return {
       id: item.id,
-      label: resolveLabel(itemRef, productsByCode),
+      label: alternatives.map((ref) => resolveLabel(ref, productsByCode)).join(' OF '),
       category: item.category || 'Algemeen',
-      itemKey: itemKey(itemRef),
-      present: present(itemRef),
+      itemKey: key,
+      present: isPresent,
     };
   });
 
