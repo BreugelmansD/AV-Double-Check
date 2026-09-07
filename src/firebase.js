@@ -23,11 +23,15 @@ export async function getFirebase() {
       ]);
       const app = initializeApp(firebaseConfig);
       const auth = authMod.getAuth(app);
-      // Sommige netwerken/proxies/browserinstellingen blokkeren Firestore's
-      // normale streaming-verbinding (WebChannel), wat zich uit als valse
-      // "client is offline"-fouten (auto-detect bleek dit niet altijd te
-      // herkennen) — forceer daarom gewone HTTP long-polling.
+      // BELANGRIJK: de Firestore-database moet de databaseId "default" hebben
+      // (zonder haakjes) — dat is wat je krijgt als je in de Firebase console
+      // handmatig een database aanmaakt via "Create database". Dat is NIET
+      // hetzelfde als Google's echte standaarddatabase-ID "(default)" (met
+      // haakjes) waar de SDK zonder deze instelling naar zoekt — vandaar de
+      // voordien blijvende "client is offline"-fouten (in werkelijkheid was
+      // het een 404: verkeerde database-naam).
       const db = storeMod.initializeFirestore(app, {
+        databaseId: 'default',
         experimentalForceLongPolling: true,
         useFetchStreams: false,
       });
