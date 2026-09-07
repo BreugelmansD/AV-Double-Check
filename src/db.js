@@ -7,6 +7,17 @@ async function store() {
   return { db, s: storeMod };
 }
 
+/**
+ * Firestore document-ID's mogen geen "/" bevatten (dat wordt als een extra
+ * padsegment gelezen, bv. "products/AUSPK5XT/2" -> 3 segmenten -> fout).
+ * Sommige Blue Moon alfacodes bevatten wel een "/" (bv. een setgrootte zoals
+ * "AUSPK5XT/2") — encodeer die daarom veilig. Het echte alfacode blijft
+ * ongewijzigd bewaard in het "code"-veld van het document zelf.
+ */
+function productDocId(code) {
+  return encodeURIComponent(code);
+}
+
 /* ---------------------------- Producten ---------------------------- */
 
 export async function getProductsMeta() {
@@ -38,7 +49,7 @@ export async function importProducts(products, { removeMissing = false } = {}) {
   for (const chunk of chunks) {
     const batch = s.writeBatch(db);
     for (const p of chunk) {
-      batch.set(s.doc(db, 'products', p.code), p);
+      batch.set(s.doc(db, 'products', productDocId(p.code)), p);
     }
     await batch.commit();
   }
@@ -47,7 +58,7 @@ export async function importProducts(products, { removeMissing = false } = {}) {
     const toRemove = existing.filter((p) => !newCodes.has(p.code));
     for (let i = 0; i < toRemove.length; i += 400) {
       const batch = s.writeBatch(db);
-      toRemove.slice(i, i + 400).forEach((p) => batch.delete(s.doc(db, 'products', p.code)));
+      toRemove.slice(i, i + 400).forEach((p) => batch.delete(s.doc(db, 'products', productDocId(p.code))));
       await batch.commit();
     }
   }
