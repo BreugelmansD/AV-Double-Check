@@ -30,11 +30,14 @@ export async function getFirebase() {
       // haakjes) waar de SDK zonder deze instelling naar zoekt — vandaar de
       // voordien blijvende "client is offline"-fouten (in werkelijkheid was
       // het een 404: verkeerde database-naam).
-      const db = storeMod.initializeFirestore(app, {
-        databaseId: 'default',
-        experimentalForceLongPolling: true,
-        useFetchStreams: false,
-      });
+      // databaseId is een apart, derde argument van initializeFirestore, geen
+      // veld binnen de settings — vandaar dat een eerdere poging om het als
+      // settings-veld door te geven stil genegeerd werd.
+      const db = storeMod.initializeFirestore(
+        app,
+        { experimentalForceLongPolling: true, useFetchStreams: false },
+        'default'
+      );
       return { app, auth, db, authMod, storeMod };
     })();
   }
