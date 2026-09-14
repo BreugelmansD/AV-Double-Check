@@ -125,95 +125,134 @@ function myRules() {
 
 const pickerInstances = new Map();
 
+/**
+ * Rij-gebaseerde picker: elk gekozen item krijgt een eigen regel. Onderaan
+ * staat een "+"-knop; die opent één nieuwe zoekregel per klik (i.p.v. één
+ * doorlopend zoekveld waar je blind opnieuw in moet typen). Start met een
+ * open zoekregel zolang de lijst nog leeg is, zodat je meteen kan zoeken.
+ */
 function mountProductPicker(containerEl, initialItems, options = {}) {
-  const max = options.max || Infinity;
   let items = initialItems.map((i) => ({ ...i }));
+  let inputOpen = items.length === 0;
+  const placeholder = containerEl.dataset.placeholder || 'Zoek een product of typ een los tekstitem...';
 
-  const chipsEl = containerEl.querySelector('.picker-chips');
-  const input = containerEl.querySelector('.picker-input');
-  const results = containerEl.querySelector('.picker-results');
+  const rowsEl = containerEl.querySelector('.picker-rows');
+  const addBtn = containerEl.querySelector('.picker-add-btn');
 
   function itemKey(it) {
     return it.type === 'product' ? `product:${it.code}` : `custom:${it.label.toLowerCase()}`;
   }
 
-  function renderChips() {
-    chipsEl.innerHTML = items.length
-      ? items.map((it, idx) => `
-        <span class="chip picker-chip ${it.type === 'custom' ? 'chip-custom' : ''}">
-          ${escapeHtml(it.label)}
-          <button type="button" class="chip-remove" data-idx="${idx}" aria-label="Verwijderen">×</button>
-        </span>`).join('')
-      : '<span class="picker-empty-hint">Nog niets gekozen</span>';
+  function addItem(itemRef) {
+    if (!items.some((i) => itemKey(i) === itemKey(itemRef))) items.push(itemRef);
+    inputOpen = false;
+    renderRows();
+  }
+
+  function wireInputRow(rowEl) {
+    const input = rowEl.querySelector('.picker-input');
+    const resultsEl = rowEl.querySelector('.picker-results');
+
+    input.addEventListener('input', () => {
+      const q = normalize(input.value);
+      if (!q) {
+        resultsEl.innerHTML = '';
+        resultsEl.classList.remove('open');
+        return;
+      }
+      const matches = state.productIndex
+        .filter((p) => p.normName.includes(q) || p.normCode.includes(q))
+        .slice(0, 20);
+      const customLabel = input.value.trim();
+      resultsEl.innerHTML = `
+        ${matches
+          .map(
+            (p) => `
+          <div class="picker-result" data-code="${escapeHtml(p.code)}">
+            <span class="picker-result-name">${escapeHtml(p.name)}</span>
+            <span class="picker-result-code">${escapeHtml(p.code)} · ${escapeHtml(p.category)}</span>
+          </div>`
+          )
+          .join('')}
+        ${
+          customLabel
+            ? `<div class="picker-result picker-result-custom" data-custom="${escapeHtml(customLabel)}">+ Toevoegen als los tekstitem: "${escapeHtml(customLabel)}"</div>`
+            : ''
+        }
+        ${matches.length === 0 && !customLabel ? '<div class="picker-result-empty">Geen resultaten</div>' : ''}
+      `;
+      resultsEl.classList.add('open');
+    });
+
+    input.addEventListener('focus', () => {
+      if (input.value.trim()) resultsEl.classList.add('open');
+    });
+
+    resultsEl.addEventListener('mousedown', (e) => {
+      // mousedown i.p.v. click zodat dit vóór de blur van het inputveld vuurt
+      const row = e.target.closest('.picker-result');
+      if (!row) return;
+      e.preventDefault();
+      if (row.dataset.code) {
+        const p = state.products.find((x) => x.code === row.dataset.code);
+        if (p) addItem({ type: 'product', code: p.code, label: p.name });
+      } else if (row.dataset.custom) {
+        addItem({ type: 'custom', label: row.dataset.custom });
+      }
+    });
+
+    input.focus();
+  }
+
+  function renderRows() {
+    const confirmedHtml = items
+      .map(
+        (it, idx) => `
+      <div class="picker-row">
+        <span class="picker-row-label ${it.type === 'custom' ? 'picker-row-custom' : ''}">${escapeHtml(it.label)}</span>
+        <button type="button" class="picker-row-remove" data-idx="${idx}" aria-label="Verwijderen">×</button>
+      </div>`
+      )
+      .join('');
+
+    const inputRowHtml = inputOpen
+      ? `
+      <div class="picker-row picker-row-input">
+        <div class="picker-input-wrap">
+          <input type="text" class="picker-input" placeholder="${escapeHtml(placeholder)}" autocomplete="off" />
+          <div class="picker-results"></div>
+        </div>
+        ${items.length > 0 ? '<button type="button" class="picker-row-remove picker-cancel-input" aria-label="Annuleren">×</button>' : ''}
+      </div>`
+      : '';
+
+    rowsEl.innerHTML = confirmedHtml + inputRowHtml || (inputOpen ? '' : '<span class="picker-empty-hint">Nog niets gekozen</span>');
+
+    rowsEl.querySelectorAll('.picker-row-remove[data-idx]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        items.splice(Number(btn.dataset.idx), 1);
+        renderRows();
+      });
+    });
+    const cancelBtn = rowsEl.querySelector('.picker-cancel-input');
+    if (cancelBtn) {
+      cancelBtn.addEventListener('click', () => {
+        inputOpen = false;
+        renderRows();
+      });
+    }
+    if (inputOpen) wireInputRow(rowsEl.querySelector('.picker-row-input'));
+
+    addBtn.style.display = inputOpen ? 'none' : '';
     options.onChange?.(items);
   }
 
-  function addItem(itemRef) {
-    if (items.some((i) => itemKey(i) === itemKey(itemRef))) return;
-    if (max === 1) items = [itemRef];
-    else items.push(itemRef);
-    renderChips();
-  }
-
-  chipsEl.addEventListener('click', (e) => {
-    const btn = e.target.closest('.chip-remove');
-    if (!btn) return;
-    items.splice(Number(btn.dataset.idx), 1);
-    renderChips();
+  addBtn.addEventListener('click', () => {
+    inputOpen = true;
+    renderRows();
   });
 
-  input.addEventListener('input', () => {
-    const q = normalize(input.value);
-    if (!q) {
-      results.innerHTML = '';
-      results.classList.remove('open');
-      return;
-    }
-    const matches = state.productIndex
-      .filter((p) => p.normName.includes(q) || p.normCode.includes(q))
-      .slice(0, 20);
-    const customLabel = input.value.trim();
-    results.innerHTML = `
-      ${matches
-        .map(
-          (p) => `
-        <div class="picker-result" data-code="${escapeHtml(p.code)}">
-          <span class="picker-result-name">${escapeHtml(p.name)}</span>
-          <span class="picker-result-code">${escapeHtml(p.code)} · ${escapeHtml(p.category)}</span>
-        </div>`
-        )
-        .join('')}
-      ${
-        customLabel
-          ? `<div class="picker-result picker-result-custom" data-custom="${escapeHtml(customLabel)}">+ Toevoegen als los tekstitem: "${escapeHtml(customLabel)}"</div>`
-          : ''
-      }
-      ${matches.length === 0 && !customLabel ? '<div class="picker-result-empty">Geen resultaten</div>' : ''}
-    `;
-    results.classList.add('open');
-  });
-
-  input.addEventListener('focus', () => {
-    if (input.value.trim()) results.classList.add('open');
-  });
-
-  results.addEventListener('mousedown', (e) => {
-    // mousedown i.p.v. click zodat dit vóór de blur van het inputveld vuurt
-    const row = e.target.closest('.picker-result');
-    if (!row) return;
-    e.preventDefault();
-    if (row.dataset.code) {
-      const p = state.products.find((x) => x.code === row.dataset.code);
-      if (p) addItem({ type: 'product', code: p.code, label: p.name });
-    } else if (row.dataset.custom) {
-      addItem({ type: 'custom', label: row.dataset.custom });
-    }
-    input.value = '';
-    results.innerHTML = '';
-    results.classList.remove('open');
-  });
-
-  renderChips();
+  renderRows();
 
   const apiObj = { getItems: () => items.slice() };
   pickerInstances.set(containerEl.dataset.pickerKey, apiObj);
@@ -222,10 +261,9 @@ function mountProductPicker(containerEl, initialItems, options = {}) {
 
 function pickerMountHtml(key, placeholder) {
   return `
-    <div class="product-picker" data-picker-key="${key}">
-      <div class="picker-chips"></div>
-      <input type="text" class="picker-input" placeholder="${escapeHtml(placeholder)}" autocomplete="off" />
-      <div class="picker-results"></div>
+    <div class="product-picker" data-picker-key="${key}" data-placeholder="${escapeHtml(placeholder)}">
+      <div class="picker-rows"></div>
+      <button type="button" class="btn btn-sm picker-add-btn">+ Materiaal toevoegen</button>
     </div>
   `;
 }
