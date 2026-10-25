@@ -45,6 +45,11 @@ function formatTimestamp(ts) {
   return date.toLocaleString('nl-BE');
 }
 
+function withQty(itemRef) {
+  const q = Number(itemRef.qty) || 1;
+  return itemRef.type === 'product' && q > 1 ? `${q}× ${itemRef.label}` : itemRef.label;
+}
+
 function uid() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -209,6 +214,7 @@ function mountProductPicker(containerEl, initialItems, options = {}) {
       .map(
         (it, idx) => `
       <div class="picker-row">
+        ${it.type === 'product' ? `<input type="number" min="1" class="picker-qty" data-idx="${idx}" value="${Math.max(1, Number(it.qty) || 1)}" title="Minimum aantal dat op de bon moet staan" aria-label="Aantal" />` : ''}
         <span class="picker-row-label ${it.type === 'custom' ? 'picker-row-custom' : ''}">${escapeHtml(it.label)}</span>
         <button type="button" class="picker-row-remove" data-idx="${idx}" aria-label="Verwijderen">×</button>
       </div>`
@@ -232,6 +238,11 @@ function mountProductPicker(containerEl, initialItems, options = {}) {
       btn.addEventListener('click', () => {
         items.splice(Number(btn.dataset.idx), 1);
         renderRows();
+      });
+    });
+    rowsEl.querySelectorAll('.picker-qty').forEach((inp) => {
+      inp.addEventListener('input', () => {
+        items[Number(inp.dataset.idx)].qty = Math.max(1, Math.floor(Number(inp.value)) || 1);
       });
     });
     const cancelBtn = rowsEl.querySelector('.picker-cancel-input');
@@ -495,7 +506,7 @@ function renderControleTab() {
       <div class="section-title"><h2>Gevonden materiaal op de bon (${r.foundProducts.length})</h2></div>
       <details class="card">
         <summary style="cursor:pointer;font-size:13px;color:var(--text-muted);">${r.foundProducts.length === 0 ? 'Geen producten uit de catalogus herkend — controleer of de PDF selecteerbare tekst bevat.' : 'Toon lijst'}</summary>
-        ${r.foundProducts.map((p) => `<div class="chip">${escapeHtml(p.name)} <span style="color:var(--text-muted)">(${escapeHtml(p.code)})</span></div>`).join('')}
+        ${r.foundProducts.map((p) => `<div class="chip">${p.onBon ? `${p.onBon}× ` : ''}${escapeHtml(p.name)} <span style="color:var(--text-muted)">(${escapeHtml(p.code)})</span></div>`).join('')}
       </details>
       ${
         r.unmatchedCodes?.length
@@ -513,6 +524,7 @@ function renderControleTab() {
           <div class="item-row ${m.present ? 'ok' : 'missing'}">
             <span class="item-dot"></span>
             <span class="item-label">${escapeHtml(m.label)} <span style="color:var(--text-muted);font-weight:400;">(${escapeHtml(m.category)})</span></span>
+            ${m.detail ? `<span class="item-detail">${escapeHtml(m.detail)}</span>` : ''}
             <span class="item-status">${m.present ? 'AANWEZIG' : 'VERGETEN'}</span>
             ${!m.present ? `<button class="btn btn-sm" data-action="toggle-override" data-key="${escapeHtml(m.itemKey)}">Toch aanwezig</button>` : ''}
           </div>`
@@ -543,6 +555,7 @@ function renderControleTab() {
               <div class="item-row ${s.present ? 'ok' : 'missing'}" style="margin-left:34px;">
                 <span class="item-dot"></span>
                 <span class="item-label">${escapeHtml(s.label)}</span>
+                ${s.detail ? `<span class="item-detail">${escapeHtml(s.detail)}</span>` : ''}
                 <span class="item-status">${s.present ? 'AANWEZIG' : 'VERGETEN'}</span>
                 ${!s.present ? `<button class="btn btn-sm" data-action="toggle-override" data-key="${escapeHtml(s.itemKey)}">Toch aanwezig</button>` : ''}
               </div>`
@@ -602,7 +615,7 @@ function renderChecklistTab() {
                   : `
             <div class="list-item">
               <div class="list-item-main">
-                <div class="list-item-title">${alwaysItemGroup(item).map((it) => escapeHtml(it.label)).join(' <span class="rule-and">OF</span> ')}</div>
+                <div class="list-item-title">${alwaysItemGroup(item).map((it) => escapeHtml(withQty(it))).join(' <span class="rule-and">OF</span> ')}</div>
                 <div class="list-item-meta">Categorie: ${escapeHtml(item.category || 'Algemeen')} · toegevoegd door ${escapeHtml(item.addedBy || '?')}</div>
               </div>
               <div class="list-item-actions">
@@ -670,9 +683,9 @@ function renderRegelsTab() {
                   <span class="scope-badge ${rule.scope}">${rule.scope === 'shared' ? 'gedeeld' : 'privé'}</span>
                 </div>
                 <div class="rule-flow">
-                  ${rule.triggers.map((t) => `<span class="rule-trigger-chip">${escapeHtml(t.label)}</span>`).join('<span class="rule-and">EN</span>')}
+                  ${rule.triggers.map((t) => `<span class="rule-trigger-chip">${escapeHtml(withQty(t))}</span>`).join('<span class="rule-and">EN</span>')}
                   <span class="rule-arrow">→ verwacht ook</span>
-                  ${rule.requires.map((s) => `<span class="rule-sugg-chip">${escapeHtml(s.label)}</span>`).join('')}
+                  ${rule.requires.map((s) => `<span class="rule-sugg-chip">${escapeHtml(withQty(s))}</span>`).join('')}
                 </div>
                 <div class="list-item-meta" style="margin-top:6px;">door ${escapeHtml(rule.ownerName || '?')}</div>
               </div>
@@ -1311,7 +1324,7 @@ app.addEventListener('submit', (e) => {
       return;
     }
     const category = data.get('category').trim() || 'Algemeen';
-    const items = picked.map((p) => (p.type === 'product' ? { type: 'product', code: p.code, label: p.label } : { type: 'custom', label: p.label }));
+    const items = picked.map((p) => (p.type === 'product' ? { type: 'product', code: p.code, label: p.label, qty: Math.max(1, Number(p.qty) || 1) } : { type: 'custom', label: p.label }));
     const item = { items, category };
     const promise = id ? updateAlwaysRequired(id, item) : addAlwaysRequired(item, state.user);
     promise

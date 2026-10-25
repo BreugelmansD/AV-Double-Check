@@ -82,7 +82,11 @@ function nameAppearsInText(entry, tokenSet, normalizedText) {
 function extractBonCodes(tokens, groupCodes) {
   const codes = [];
   for (let i = 0; i < tokens.length - 1; i += 1) {
-    if (groupCodes.has(tokens[i]) && /^[a-z0-9]/.test(tokens[i + 1])) codes.push(tokens[i] + tokens[i + 1]);
+    if (groupCodes.has(tokens[i]) && /^[a-z0-9]/.test(tokens[i + 1])) {
+      // het aantal staat op een Blue Moon-bon rechts van de code
+      const qty = /^\d+$/.test(tokens[i + 2] || '') ? Number(tokens[i + 2]) : 1;
+      codes.push({ code: tokens[i] + tokens[i + 1], qty });
+    }
   }
   return codes;
 }
@@ -98,7 +102,8 @@ const MIN_BON_CODES_FOR_STRUCTURED = 3;
  * woorden "cable", "32a", "5m" ergens op de bon voorkomen). Plak je gewone
  * tekst zonder codes, dan valt de app terug op herkenning via de productnaam.
  *
- * @returns {{found: Set<string>, mode: 'codes'|'text', unmatchedCodes: string[]}}
+ * @returns {{found: Set<string>, quantities: Map<string, number>|null, mode: 'codes'|'text', unmatchedCodes: string[]}}
+ * `quantities` = totaal aantal per productcode op de bon (enkel bij een gestructureerde bon).
  */
 export function findProductsInText(bonText, productIndex) {
   const normalizedText = normalize(bonText);
@@ -110,12 +115,18 @@ export function findProductsInText(bonText, productIndex) {
 
   if (bonCodes.length >= MIN_BON_CODES_FOR_STRUCTURED) {
     const byCode = new Map(productIndex.map((e) => [e.normCode, e.code]));
-    const unmatchedCodes = [];
-    for (const code of new Set(bonCodes)) {
-      if (byCode.has(code)) found.add(byCode.get(code));
-      else unmatchedCodes.push(code.toUpperCase());
+    const quantities = new Map();
+    const unmatched = new Set();
+    for (const { code, qty } of bonCodes) {
+      if (byCode.has(code)) {
+        const real = byCode.get(code);
+        found.add(real);
+        quantities.set(real, (quantities.get(real) || 0) + qty);
+      } else {
+        unmatched.add(code.toUpperCase());
+      }
     }
-    return { found, mode: 'codes', unmatchedCodes };
+    return { found, quantities, mode: 'codes', unmatchedCodes: [...unmatched] };
   }
 
   for (const entry of productIndex) {
@@ -123,7 +134,7 @@ export function findProductsInText(bonText, productIndex) {
       found.add(entry.code);
     }
   }
-  return { found, mode: 'text', unmatchedCodes: [] };
+  return { found, quantities: null, mode: 'text', unmatchedCodes: [] };
 }
 
 /**
@@ -140,11 +151,40 @@ function customLabelAppearsInText(label, normalizedText) {
  * Evalueert of een item-referentie (product uit catalogus of vrije tekst)
  * aanwezig is, rekening houdend met manuele overrides ("toch aanwezig").
  */
-function isItemPresent(itemRef, foundCodes, normalizedText, overrides) {
+function neededQty(itemRef) {
+  return Math.max(1, Number(itemRef.qty) || 1);
+}
+
+/**
+ * Hoeveel er van een item op de bon staat (null = onbekend, bv. bij gewone
+ * geplakte tekst of bij een los tekstitem: dan kunnen we geen aantal controleren).
+ */
+function qtyOnBon(itemRef, foundCodes, quantities) {
+  if (itemRef.type !== 'product' || !quantities) return null;
+  return foundCodes.has(itemRef.code) ? quantities.get(itemRef.code) ?? 1 : 0;
+}
+
+/**
+ * Evalueert of een item-referentie (product uit catalogus of vrije tekst)
+ * aanwezig is, rekening houdend met het gevraagde aantal en manuele
+ * overrides ("toch aanwezig").
+ */
+function isItemPresent(itemRef, foundCodes, normalizedText, overrides, quantities) {
   const key = itemKey(itemRef);
   if (overrides && overrides.has(key)) return true;
-  if (itemRef.type === 'product') return foundCodes.has(itemRef.code);
+  if (itemRef.type === 'product') {
+    if (!foundCodes.has(itemRef.code)) return false;
+    const have = qtyOnBon(itemRef, foundCodes, quantities);
+    return have === null || have >= neededQty(itemRef);
+  }
   return customLabelAppearsInText(itemRef.label, normalizedText);
+}
+
+/** Uitleg bij een tekort, bv. "1 op bon, 2 nodig". Leeg als er geen aantalprobleem is. */
+function shortfallDetail(itemRef, foundCodes, quantities) {
+  const have = qtyOnBon(itemRef, foundCodes, quantities);
+  if (have === null || have >= neededQty(itemRef)) return '';
+  return `${have} op bon, ${neededQty(itemRef)} nodig`;
 }
 
 export function itemKey(itemRef) {
@@ -156,11 +196,14 @@ export function itemKey(itemRef) {
  * zijn sinds de regel/checklist werd aangemaakt).
  */
 function resolveLabel(itemRef, productsByCode) {
-  if (itemRef.type === 'product') {
-    const live = productsByCode.get(itemRef.code);
-    return live ? live.name : `${itemRef.label} (niet meer in catalogus)`;
-  }
-  return itemRef.label;
+  const base = (() => {
+    if (itemRef.type === 'product') {
+      const live = productsByCode.get(itemRef.code);
+      return live ? live.name : `${itemRef.label} (niet meer in catalogus)`;
+    }
+    return itemRef.label;
+  })();
+  return itemRef.type === 'product' && neededQty(itemRef) > 1 ? `${neededQty(itemRef)}× ${base}` : base;
 }
 
 /**
@@ -170,9 +213,9 @@ function resolveLabel(itemRef, productsByCode) {
  */
 function alwaysEntryItems(entry) {
   if (Array.isArray(entry.items) && entry.items.length > 0) {
-    return entry.items.map((it) => (it.type === 'product' ? { type: 'product', code: it.code, label: it.label } : { type: 'custom', label: it.label }));
+    return entry.items.map((it) => (it.type === 'product' ? { type: 'product', code: it.code, label: it.label, qty: it.qty } : { type: 'custom', label: it.label }));
   }
-  return [entry.type === 'product' ? { type: 'product', code: entry.code, label: entry.label } : { type: 'custom', label: entry.label }];
+  return [entry.type === 'product' ? { type: 'product', code: entry.code, label: entry.label, qty: entry.qty } : { type: 'custom', label: entry.label }];
 }
 
 function groupKey(itemRefs) {
@@ -194,9 +237,10 @@ export function runCheck(bonText, products, alwaysRequired, rules, overrides = n
   const normalizedText = normalize(bonText);
   const productIndex = buildProductIndex(products);
   const productsByCode = new Map(products.map((p) => [p.code, p]));
-  const { found: foundCodes, mode, unmatchedCodes } = findProductsInText(bonText, productIndex);
+  const { found: foundCodes, quantities, mode, unmatchedCodes } = findProductsInText(bonText, productIndex);
 
-  const present = (itemRef) => isItemPresent(itemRef, foundCodes, normalizedText, overrides);
+  const present = (itemRef) => isItemPresent(itemRef, foundCodes, normalizedText, overrides, quantities);
+  const detailFor = (refs) => refs.map((r) => shortfallDetail(r, foundCodes, quantities)).filter(Boolean).join('; ');
 
   const alwaysResults = alwaysRequired.map((item) => {
     const alternatives = alwaysEntryItems(item);
@@ -208,6 +252,7 @@ export function runCheck(bonText, products, alwaysRequired, rules, overrides = n
       category: item.category || 'Algemeen',
       itemKey: key,
       present: isPresent,
+      detail: isPresent ? '' : detailFor(alternatives),
     };
   });
 
@@ -217,6 +262,7 @@ export function runCheck(bonText, products, alwaysRequired, rules, overrides = n
       label: resolveLabel(r, productsByCode),
       itemKey: itemKey(r),
       present: triggered ? present(r) : false,
+      detail: triggered && !present(r) ? detailFor([r]) : '',
     }));
     return {
       id: rule.id,
@@ -231,6 +277,7 @@ export function runCheck(bonText, products, alwaysRequired, rules, overrides = n
 
   const foundProducts = products
     .filter((p) => foundCodes.has(p.code))
+    .map((p) => ({ ...p, onBon: quantities ? quantities.get(p.code) ?? 1 : null }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
   const missingAlways = alwaysResults.filter((m) => !m.present);

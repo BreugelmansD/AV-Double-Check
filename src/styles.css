@@ -939,3 +939,20 @@ select {
   font-size: 12.5px;
   font-weight: 600;
 }
+
+.picker-qty {
+  flex-shrink: 0;
+  width: 56px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 6px;
+  font-size: 13px;
+  font-family: inherit;
+  text-align: center;
+}
+
+.item-detail {
+  font-size: 11.5px;
+  color: var(--red);
+  white-space: nowrap;
+}
