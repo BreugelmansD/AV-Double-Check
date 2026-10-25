@@ -38,6 +38,7 @@ export function buildProductIndex(products) {
       name: p.name,
       category: p.category,
       group: p.group,
+      normGroup: normalize(p.groupCode || ''),
       normCode,
       normName,
       words: significantWords(normName),
@@ -73,19 +74,56 @@ function nameAppearsInText(entry, tokenSet, normalizedText) {
 }
 
 /**
+ * Op een echte Blue Moon-bon staat de alfacode als "GROEP SUFFIX" (met spatie,
+ * bv. "AUACC USBPRO"), terwijl de catalogus "AUACCUSBPRO" heeft. Zoekt alle
+ * zulke codes in de tekst op.
+ * @returns {string[]} genormaliseerde codes zoals in de catalogus (zonder spatie)
+ */
+function extractBonCodes(tokens, groupCodes) {
+  const codes = [];
+  for (let i = 0; i < tokens.length - 1; i += 1) {
+    if (groupCodes.has(tokens[i]) && /^[a-z0-9]/.test(tokens[i + 1])) codes.push(tokens[i] + tokens[i + 1]);
+  }
+  return codes;
+}
+
+const MIN_BON_CODES_FOR_STRUCTURED = 3;
+
+/**
  * Bepaalt welke producten uit de catalogus effectief op de bon terug te vinden zijn.
- * @returns {Set<string>} set van productcodes die gevonden zijn
+ *
+ * Bevat de tekst minstens een paar bon-codes ("GROEP SUFFIX"), dan is het een
+ * gestructureerde bon en tellen ENKEL die exacte codes: namen zoeken in een
+ * lange tekst geeft anders veel valse treffers (bv. elke kabel waarvan de
+ * woorden "cable", "32a", "5m" ergens op de bon voorkomen). Plak je gewone
+ * tekst zonder codes, dan valt de app terug op herkenning via de productnaam.
+ *
+ * @returns {{found: Set<string>, mode: 'codes'|'text', unmatchedCodes: string[]}}
  */
 export function findProductsInText(bonText, productIndex) {
   const normalizedText = normalize(bonText);
-  const tokenSet = new Set(normalizedText.split(' '));
+  const tokens = normalizedText.split(' ');
+  const tokenSet = new Set(tokens);
+  const groupCodes = new Set(productIndex.map((e) => e.normGroup).filter(Boolean));
+  const bonCodes = extractBonCodes(tokens, groupCodes);
   const found = new Set();
+
+  if (bonCodes.length >= MIN_BON_CODES_FOR_STRUCTURED) {
+    const byCode = new Map(productIndex.map((e) => [e.normCode, e.code]));
+    const unmatchedCodes = [];
+    for (const code of new Set(bonCodes)) {
+      if (byCode.has(code)) found.add(byCode.get(code));
+      else unmatchedCodes.push(code.toUpperCase());
+    }
+    return { found, mode: 'codes', unmatchedCodes };
+  }
+
   for (const entry of productIndex) {
     if (codeAppearsInText(entry.normCode, tokenSet, normalizedText) || nameAppearsInText(entry, tokenSet, normalizedText)) {
       found.add(entry.code);
     }
   }
-  return found;
+  return { found, mode: 'text', unmatchedCodes: [] };
 }
 
 /**
@@ -156,7 +194,7 @@ export function runCheck(bonText, products, alwaysRequired, rules, overrides = n
   const normalizedText = normalize(bonText);
   const productIndex = buildProductIndex(products);
   const productsByCode = new Map(products.map((p) => [p.code, p]));
-  const foundCodes = findProductsInText(bonText, productIndex);
+  const { found: foundCodes, mode, unmatchedCodes } = findProductsInText(bonText, productIndex);
 
   const present = (itemRef) => isItemPresent(itemRef, foundCodes, normalizedText, overrides);
 
@@ -215,5 +253,5 @@ export function runCheck(bonText, products, alwaysRequired, rules, overrides = n
   );
   stats.completeness = totalChecks === 0 ? 100 : Math.round((totalOk / totalChecks) * 100);
 
-  return { foundProducts, always: alwaysResults, rules: ruleResults, stats };
+  return { foundProducts, always: alwaysResults, rules: ruleResults, stats, mode, unmatchedCodes };
 }

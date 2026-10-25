@@ -482,6 +482,11 @@ function renderControleTab() {
         <summary style="cursor:pointer;font-size:13px;color:var(--text-muted);">${r.foundProducts.length === 0 ? 'Geen producten uit de catalogus herkend — controleer of de PDF selecteerbare tekst bevat.' : 'Toon lijst'}</summary>
         ${r.foundProducts.map((p) => `<div class="chip">${escapeHtml(p.name)} <span style="color:var(--text-muted)">(${escapeHtml(p.code)})</span></div>`).join('')}
       </details>
+      ${
+        r.unmatchedCodes?.length
+          ? `<div class="warning-box"><strong>${r.unmatchedCodes.length} code(s) op de bon staan niet in de catalogus</strong> en worden dus niet gecontroleerd (catalogus verouderd of code gewijzigd?): ${r.unmatchedCodes.map((c) => escapeHtml(c)).join(', ')}</div>`
+          : ''
+      }
 
       <div class="section-title">
         <h2>Altijd nodig</h2>
