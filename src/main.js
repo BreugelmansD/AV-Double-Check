@@ -348,7 +348,11 @@ function renderSidebar() {
       const found = state.currentReport.report.always.find((m) => m.id === item.id);
       if (found) status = found.present ? 'ok' : 'missing';
     }
-    grouped[cat].push({ label: item.label, status });
+    const group = alwaysItemGroup(item);
+    grouped[cat].push({
+      label: group.length > 1 ? `${group[0].label} (+${group.length - 1} alternatief${group.length > 2 ? 'en' : ''})` : group[0].label,
+      status,
+    });
   });
 
   const statusLabel = { ok: 'OK', missing: 'MIST', pending: 'TBD' };
@@ -382,6 +386,12 @@ function renderSidebar() {
 function renderSummaryPanel() {
   if (state.tab === 'controle') {
     const r = state.currentReport?.report;
+    const missingList = r
+      ? [
+          ...r.always.filter((m) => !m.present).map((m) => m.label),
+          ...r.rules.filter((x) => x.triggered).flatMap((x) => x.requires.filter((q) => !q.present).map((q) => q.label)),
+        ]
+      : [];
     return `
       <aside class="summary-panel">
         <h3>Samenvatting</h3>
@@ -394,6 +404,11 @@ function renderSummaryPanel() {
             <div class="summary-stat"><span>Regels getriggerd</span><strong>${r.stats.rulesTriggered}</strong></div>
             <div class="summary-stat"><span>Regels met gaten</span><strong>${r.stats.rulesWithGaps}</strong></div>
           </div>
+          ${
+            missingList.length
+              ? `<div class="summary-block"><label>Ontbreekt (${missingList.length})</label>${missingList.map((m) => `<div class="missing-line">${escapeHtml(m)}</div>`).join('')}</div>`
+              : '<div class="summary-block"><div class="ok-line">Niets ontbreekt</div></div>'
+          }
           <div class="summary-block">
             <label>Bestand</label>
             <div style="font-size:13px;">${escapeHtml(state.currentReport.fileName)}</div>

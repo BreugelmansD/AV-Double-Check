@@ -214,9 +214,19 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   padding: 6px 4px;
   font-size: 13.5px;
   border-radius: 6px;
+}
+
+.sidebar-row > span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.sidebar-row .status-tag {
+  flex-shrink: 0;
 }
 
 .sidebar-row:hover {
@@ -909,4 +919,23 @@ select {
   color: var(--navy-soft);
   font-size: 12px;
   text-align: right;
+}
+
+.missing-line {
+  background: var(--red-soft);
+  color: var(--red);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12.5px;
+  margin-bottom: 6px;
+  overflow-wrap: anywhere;
+}
+
+.ok-line {
+  background: var(--green-soft);
+  color: var(--green);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12.5px;
+  font-weight: 600;
 }
