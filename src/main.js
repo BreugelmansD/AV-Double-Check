@@ -881,6 +881,10 @@ function renderGateScreen() {
         <p>${unlocked ? 'Onder welke naam wil je verdergaan?' : 'Voer de teamcode van Blue Moon in om verder te gaan.'}</p>
         ${state.gateError ? `<div class="error-box">${escapeHtml(state.gateError)}</div>` : ''}
         <form data-action="gate-submit" style="text-align:left;">
+          <div class="field">
+            <label>Jouw naam</label>
+            <input type="text" name="displayName" value="${escapeHtml(savedName)}" placeholder="bv. Jan Peeters" required />
+          </div>
           ${
             unlocked
               ? ''
@@ -889,10 +893,6 @@ function renderGateScreen() {
                   <input type="password" name="passcode" autocomplete="off" required />
                 </div>`
           }
-          <div class="field">
-            <label>Jouw naam</label>
-            <input type="text" name="displayName" value="${escapeHtml(savedName)}" placeholder="bv. Jan Peeters" required />
-          </div>
           <button type="submit" class="btn btn-primary" style="width:100%;">Binnen</button>
         </form>
       </div>
