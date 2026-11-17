@@ -16,7 +16,7 @@ export const firebaseConfig = {
 // Gedeelde toegangscode voor het hele Blue Moon-team (geen Google-login nodig).
 // Dit is een lichte toegangsdrempel, geen echte beveiliging: iedereen die de
 // broncode bekijkt kan deze code zien. Pas hem aan wanneer je maar wil.
-export const TEAM_PASSCODE = 'bluemoon2026';
+export const TEAM_PASSCODE = '2800';
 
 export function isFirebaseConfigured() {
   return firebaseConfig.apiKey !== 'VUL_IN' && !!firebaseConfig.apiKey;
