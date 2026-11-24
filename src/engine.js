@@ -183,7 +183,8 @@ function isItemPresent(itemRef, foundCodes, normalizedText, overrides, quantitie
 /** Uitleg bij een tekort, bv. "1 op bon, 2 nodig". Leeg als er geen aantalprobleem is. */
 function shortfallDetail(itemRef, foundCodes, quantities) {
   const have = qtyOnBon(itemRef, foundCodes, quantities);
-  if (have === null || have >= neededQty(itemRef)) return '';
+  // bij "1 nodig" zegt de status "ontbreekt" al genoeg
+  if (have === null || have >= neededQty(itemRef) || neededQty(itemRef) === 1) return '';
   return `${have} op bon, ${neededQty(itemRef)} nodig`;
 }
 
