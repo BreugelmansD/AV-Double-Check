@@ -30,12 +30,17 @@ service cloud.firestore {
     }
 
     // Logische regels: iedereen ziet alle regels (gedeeld + ieders privé-regels,
-    // gefilterd aan de clientzijde), maar enkel de eigenaar (zelfde anonieme
-    // sessie/browser die de regel aanmaakte) mag bewerken/verwijderen.
+    // gefilterd aan de clientzijde). GEDEELDE regels mag iedereen bewerken of
+    // verwijderen (zoals "altijd nodig"); een PRIVÉ-regel enkel de eigenaar. De
+    // eigenaar zelf kan niet via een bewerking veranderen.
     match /rules/{id} {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && request.resource.data.ownerUid == request.auth.uid;
-      allow update, delete: if isSignedIn() && resource.data.ownerUid == request.auth.uid;
+      allow update: if isSignedIn()
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && (resource.data.scope == 'shared' || resource.data.ownerUid == request.auth.uid);
+      allow delete: if isSignedIn()
+        && (resource.data.scope == 'shared' || resource.data.ownerUid == request.auth.uid);
     }
 
     // Controlegeschiedenis: iedereen ziet alle controles (transparantie), maar

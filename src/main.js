@@ -700,7 +700,7 @@ function renderRegelsTab() {
                 <div class="list-item-meta" style="margin-top:6px;">door ${escapeHtml(rule.ownerName || '?')}</div>
               </div>
               ${
-                rule.ownerUid === state.user?.uid
+                rule.scope === 'shared' || rule.ownerUid === state.user?.uid
                   ? `<div class="list-item-actions">
                       <button class="btn btn-sm" data-action="edit-rule-open" data-id="${rule.id}">Bewerken</button>
                       <button class="btn btn-sm btn-danger" data-action="delete-rule" data-id="${rule.id}">Verwijderen</button>
@@ -733,7 +733,7 @@ function renderRuleForm(rule) {
         <label>Zichtbaarheid</label>
         <select name="scope">
           <option value="shared" ${rule?.scope === 'shared' || !rule ? 'selected' : ''}>Gedeeld — telt mee voor iedereen bij Blue Moon</option>
-          <option value="private" ${rule?.scope === 'private' ? 'selected' : ''}>Privé — telt enkel mee bij mijn eigen controles</option>
+          <option value="private" ${rule?.scope === 'private' ? 'selected' : ''} ${rule && rule.ownerUid !== state.user?.uid ? 'disabled' : ''}>Privé — telt enkel mee bij mijn eigen controles</option>
         </select>
       </div>
       <div style="display:flex;gap:8px;">
