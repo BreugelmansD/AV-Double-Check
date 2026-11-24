@@ -180,6 +180,20 @@ function isItemPresent(itemRef, foundCodes, normalizedText, overrides, quantitie
   return customLabelAppearsInText(itemRef.label, normalizedText);
 }
 
+/**
+ * Een vereist item met "per trigger-stuk" heeft geen vast aantal: het gevraagde
+ * aantal is zijn getal × het aantal van de (eerste) trigger op de bon. Zo vraagt
+ * "2× A10 WIDE" automatisch om "2× AMOUNT". Is het aantal van de trigger niet
+ * te lezen (gewone tekst), dan geldt het gewone aanwezig-of-niet.
+ */
+function effectiveRequire(requireRef, triggers, foundCodes, quantities) {
+  if (!requireRef.perTrigger || requireRef.type !== 'product') return requireRef;
+  const trigger = triggers.find((t) => t.type === 'product');
+  const base = trigger ? qtyOnBon(trigger, foundCodes, quantities) : null;
+  if (base === null) return requireRef;
+  return { ...requireRef, qty: Math.max(1, base) * Math.max(1, Number(requireRef.qty) || 1) };
+}
+
 /** Uitleg bij een tekort, bv. "1 op bon, 2 nodig". Leeg als er geen aantalprobleem is. */
 function shortfallDetail(itemRef, foundCodes, quantities) {
   const have = qtyOnBon(itemRef, foundCodes, quantities);
@@ -259,12 +273,15 @@ export function runCheck(bonText, products, alwaysRequired, rules, overrides = n
 
   const ruleResults = rules.map((rule) => {
     const triggered = rule.triggers.length > 0 && rule.triggers.every((t) => present(t));
-    const requires = rule.requires.map((r) => ({
-      label: resolveLabel(r, productsByCode),
-      itemKey: itemKey(r),
-      present: triggered ? present(r) : false,
-      detail: triggered && !present(r) ? detailFor([r]) : '',
-    }));
+    const requires = rule.requires.map((raw) => {
+      const r = effectiveRequire(raw, rule.triggers, foundCodes, quantities);
+      return {
+        label: resolveLabel(r, productsByCode),
+        itemKey: itemKey(r),
+        present: triggered ? present(r) : false,
+        detail: triggered && !present(r) ? detailFor([r]) : '',
+      };
+    });
     return {
       id: rule.id,
       scope: rule.scope,

@@ -956,3 +956,14 @@ select {
   color: var(--red);
   white-space: nowrap;
 }
+
+.picker-pertrigger {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  cursor: pointer;
+}

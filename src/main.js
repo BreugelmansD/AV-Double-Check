@@ -47,6 +47,9 @@ function formatTimestamp(ts) {
 
 function withQty(itemRef) {
   const q = Number(itemRef.qty) || 1;
+  if (itemRef.type === 'product' && itemRef.perTrigger) {
+    return `${itemRef.label} (${q > 1 ? `${q}× ` : ''}evenveel als de trigger)`;
+  }
   return itemRef.type === 'product' && q > 1 ? `${q}× ${itemRef.label}` : itemRef.label;
 }
 
@@ -216,6 +219,7 @@ function mountProductPicker(containerEl, initialItems, options = {}) {
       <div class="picker-row">
         ${it.type === 'product' ? `<input type="number" min="1" class="picker-qty" data-idx="${idx}" value="${Math.max(1, Number(it.qty) || 1)}" title="Minimum aantal dat op de bon moet staan" aria-label="Aantal" />` : ''}
         <span class="picker-row-label ${it.type === 'custom' ? 'picker-row-custom' : ''}">${escapeHtml(it.label)}</span>
+        ${options.perTrigger && it.type === 'product' ? `<label class="picker-pertrigger" title="Aantal = dit getal × het aantal van de (eerste) trigger op de bon. Bv. 2× A10 WIDE op de bon geeft 2× dit item."><input type="checkbox" class="picker-pt" data-idx="${idx}" ${it.perTrigger ? 'checked' : ''} /> per trigger-stuk</label>` : ''}
         <button type="button" class="picker-row-remove" data-idx="${idx}" aria-label="Verwijderen">×</button>
       </div>`
       )
@@ -243,6 +247,12 @@ function mountProductPicker(containerEl, initialItems, options = {}) {
     rowsEl.querySelectorAll('.picker-qty').forEach((inp) => {
       inp.addEventListener('input', () => {
         items[Number(inp.dataset.idx)].qty = Math.max(1, Math.floor(Number(inp.value)) || 1);
+      });
+    });
+    rowsEl.querySelectorAll('.picker-pt').forEach((box) => {
+      box.addEventListener('change', () => {
+        items[Number(box.dataset.idx)].perTrigger = box.checked;
+        options.onChange?.(items);
       });
     });
     const cancelBtn = rowsEl.querySelector('.picker-cancel-input');
@@ -1043,7 +1053,7 @@ function attachDynamicListeners() {
     const initTriggers = JSON.parse(form.querySelector('[data-picker-triggers-init]').dataset.pickerTriggersInit || '[]');
     const initRequires = JSON.parse(form.querySelector('[data-picker-requires-init]').dataset.pickerRequiresInit || '[]');
     mountProductPicker(triggersPicker, initTriggers);
-    mountProductPicker(requiresPicker, initRequires);
+    mountProductPicker(requiresPicker, initRequires, { perTrigger: true });
   }
 
   // Producten-zoekbalk: scoped update, geen volledige render (behoudt focus tijdens typen)
