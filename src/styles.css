@@ -967,3 +967,10 @@ select {
   white-space: nowrap;
   cursor: pointer;
 }
+
+.mode-select {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 12.5px;
+  padding: 6px 9px;
+}

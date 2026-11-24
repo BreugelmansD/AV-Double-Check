@@ -689,13 +689,13 @@ function renderRegelsTab() {
             <div class="list-item">
               <div class="list-item-main">
                 <div class="list-item-title">
-                  Als dit allemaal op de bon staat...
+                  Als ${rule.triggerMode === 'any' ? 'één hiervan' : 'dit allemaal'} op de bon staat...
                   <span class="scope-badge ${rule.scope}">${rule.scope === 'shared' ? 'gedeeld' : 'privé'}</span>
                 </div>
                 <div class="rule-flow">
-                  ${rule.triggers.map((t) => `<span class="rule-trigger-chip">${escapeHtml(withQty(t))}</span>`).join('<span class="rule-and">EN</span>')}
-                  <span class="rule-arrow">→ verwacht ook</span>
-                  ${rule.requires.map((s) => `<span class="rule-sugg-chip">${escapeHtml(withQty(s))}</span>`).join('')}
+                  ${rule.triggers.map((t) => `<span class="rule-trigger-chip">${escapeHtml(withQty(t))}</span>`).join(`<span class="rule-and">${rule.triggerMode === 'any' ? 'OF' : 'EN'}</span>`)}
+                  <span class="rule-arrow">→ verwacht ${rule.requireMode === 'any' ? 'één van' : 'ook'}</span>
+                  ${rule.requires.map((s) => `<span class="rule-sugg-chip">${escapeHtml(withQty(s))}</span>`).join(rule.requireMode === 'any' ? '<span class="rule-and">OF</span>' : '')}
                 </div>
                 <div class="list-item-meta" style="margin-top:6px;">door ${escapeHtml(rule.ownerName || '?')}</div>
               </div>
@@ -722,11 +722,19 @@ function renderRuleForm(rule) {
   return `
     <form class="card" data-action="submit-rule" data-id="${isEdit ? rule.id : ''}">
       <div class="field">
-        <label>ALS ik dit allemaal bij heb (EN — alles moet op de bon staan)</label>
+        <label>ALS dit op de bon staat</label>
+        <select name="triggerMode" class="mode-select">
+          <option value="all" ${rule?.triggerMode !== 'any' ? 'selected' : ''}>alles hieronder moet erop staan (EN)</option>
+          <option value="any" ${rule?.triggerMode === 'any' ? 'selected' : ''}>één hiervan volstaat (OF)</option>
+        </select>
         ${pickerMountHtml('rule-triggers', 'Zoek een product of typ een los tekstitem...')}
       </div>
       <div class="field">
         <label>...MOET ik dit ook bij hebben</label>
+        <select name="requireMode" class="mode-select">
+          <option value="all" ${rule?.requireMode !== 'any' ? 'selected' : ''}>alles hieronder moet mee (EN)</option>
+          <option value="any" ${rule?.requireMode === 'any' ? 'selected' : ''}>één hiervan volstaat (OF)</option>
+        </select>
         ${pickerMountHtml('rule-requires', 'Zoek een product of typ een los tekstitem...')}
       </div>
       <div class="field">
@@ -1353,7 +1361,13 @@ app.addEventListener('submit', (e) => {
       return;
     }
     const scope = data.get('scope');
-    const rule = { triggers, requires, scope };
+    const rule = {
+      triggers,
+      requires,
+      scope,
+      triggerMode: data.get('triggerMode') === 'any' ? 'any' : 'all',
+      requireMode: data.get('requireMode') === 'any' ? 'any' : 'all',
+    };
     const promise = id ? updateRule(id, rule) : addRule(rule, state.user);
     promise
       .then(() => showToast('Regel opgeslagen.'))

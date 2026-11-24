@@ -188,7 +188,8 @@ function isItemPresent(itemRef, foundCodes, normalizedText, overrides, quantitie
  */
 function effectiveRequire(requireRef, triggers, foundCodes, quantities) {
   if (!requireRef.perTrigger || requireRef.type !== 'product') return requireRef;
-  const trigger = triggers.find((t) => t.type === 'product');
+  const productTriggers = triggers.filter((t) => t.type === 'product');
+  const trigger = productTriggers.find((t) => foundCodes.has(t.code)) || productTriggers[0];
   const base = trigger ? qtyOnBon(trigger, foundCodes, quantities) : null;
   if (base === null) return requireRef;
   return { ...requireRef, qty: Math.max(1, base) * Math.max(1, Number(requireRef.qty) || 1) };
@@ -271,22 +272,40 @@ export function runCheck(bonText, products, alwaysRequired, rules, overrides = n
     };
   });
 
+  // Per regel kiezen triggers en vereist materiaal elk tussen EN ("alles") en
+  // OF ("één ervan volstaat"). Zonder keuze (oude regels) geldt EN.
   const ruleResults = rules.map((rule) => {
-    const triggered = rule.triggers.length > 0 && rule.triggers.every((t) => present(t));
-    const requires = rule.requires.map((raw) => {
-      const r = effectiveRequire(raw, rule.triggers, foundCodes, quantities);
-      return {
+    const triggerAny = rule.triggerMode === 'any';
+    const requireAny = rule.requireMode === 'any';
+    const presentTriggers = rule.triggers.filter((t) => present(t));
+    const triggered = rule.triggers.length > 0 && (triggerAny ? presentTriggers.length > 0 : presentTriggers.length === rule.triggers.length);
+
+    const effective = rule.requires.map((raw) => effectiveRequire(raw, rule.triggers, foundCodes, quantities));
+    let requires;
+    if (requireAny && effective.length > 1) {
+      // één regel voor de hele groep: voldaan zodra één alternatief aanwezig is
+      const key = groupKey(effective);
+      const ok = triggered && ((overrides && overrides.has(key)) || effective.some((r) => present(r)));
+      requires = [{
+        label: effective.map((r) => resolveLabel(r, productsByCode)).join(' OF '),
+        itemKey: key,
+        present: ok,
+        detail: triggered && !ok ? detailFor(effective) : '',
+      }];
+    } else {
+      requires = effective.map((r) => ({
         label: resolveLabel(r, productsByCode),
         itemKey: itemKey(r),
         present: triggered ? present(r) : false,
         detail: triggered && !present(r) ? detailFor([r]) : '',
-      };
-    });
+      }));
+    }
     return {
       id: rule.id,
       scope: rule.scope,
       ownerName: rule.ownerName,
-      triggerLabels: rule.triggers.map((t) => resolveLabel(t, productsByCode)),
+      // bij OF enkel de triggers die er effectief op staan ("Omdat er A op staat")
+      triggerLabels: (triggered ? presentTriggers : rule.triggers).map((t) => resolveLabel(t, productsByCode)),
       triggered,
       requires,
       missingCount: triggered ? requires.filter((r) => !r.present).length : 0,
